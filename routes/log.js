@@ -16,7 +16,9 @@ router.get('/', function(req, res, next) {
 router.get('/listAll', function(req, res, next) {
     var connection = new Connection(config.development.database);
     var retval = '';
-    var sqlstring = 'select * from dp_failedtriggers WHERE Result IS NULL order by addedon';
+    var sqlstring = 'SELECT dp_failedtriggers.*, t.TruckCenter from dp_failedtriggers INNER JOIN EUD.dbo.adtbTruckCenters t\n' +
+        'ON t.TruckCenterID = dp_failedtriggers.TruckCenterID AND t.Environ = \'p\'\n' +
+        ' WHERE Result IS NULL order by addedon';
     connection.on('connect', function(err){
         var request;
         request = new Request(sqlstring, function(err, rowCount, rows) {
@@ -340,6 +342,46 @@ router.get('/failedTriggersByTruckCenter', function(req, res, next) {
         connection.execSql(request);
     });
 });
+
+router.get('/searchTruckCenter/name/:name',function (req,res,next) {
+        var connection = new Connection(config.development.database);
+        var retval = '';
+        var tc = req.params.name;
+        var sqlstring = ' SELECT TruckCenterID, \n' +
+            ' TruckCenter\n' +
+            '  FROM EUD.dbo.adtbTruckCenters WHERE TruckCenter like @name AND Environ = \'p\' ORDER BY TruckCenter ASC';
+        console.log('sql query:' + sqlstring);
+        connection.on('connect', function(err){
+            var request;
+            request = new Request(sqlstring, function(err, rowCount, rows) {
+                if (err){
+                    console.log('Error');
+                    console.log(err);
+                    connection.close();
+                } else {
+                    console.log('connect!');
+                    var rowarray = [];
+                    rows.forEach(function(columns){
+                        var rowdata = new Object();
+                        columns.forEach(function(column) {
+                            rowdata[column.metadata.colName] = column.value;
+                        });
+                        rowarray.push(rowdata);
+                    })
+                    connection.close();
+                    res.contentType('application/json');
+                    retval = JSON.stringify(rowarray);
+
+                    res.write(retval);
+                    res.end();
+                    //console.log(retval);
+                }
+            });
+            request.addParameter('name', TYPES.NVarChar,'%' + tc + '%');
+            connection.execSql(request);
+        });
+    }
+);
 
 function executeStatement(sqlConnect) {
     var sql = 'select * from dp_failedtriggers order by addedon';
